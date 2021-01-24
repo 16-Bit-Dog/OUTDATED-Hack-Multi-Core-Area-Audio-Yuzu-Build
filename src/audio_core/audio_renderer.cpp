@@ -209,6 +209,8 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag) {
     if (!splitter_context.UsingSplitter()) {
         mix_context.SortInfo();
     }
+    
+    ThreadAudioBuffer = std::async(std::launch::async, [&] {
     // Sort our voices
     voice_context.SortInfo();
 
@@ -218,6 +220,8 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag) {
     command_generator.GenerateFinalMixCommands();
 
     command_generator.PostCommand();
+    });
+    
     // Base sample size
     std::size_t BUFFER_SIZE{worker_params.sample_count};
     // Samples
@@ -237,6 +241,8 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag) {
                 command_generator.GetMixBuffer(in_params.buffer_offset + buffer_offsets[i]);
         }
 
+        ThreadAudioBuffer.get();
+        
         for (std::size_t i = 0; i < BUFFER_SIZE; i++) {
             if (channel_count == 1) {
                 const auto sample = ClampToS16(mix_buffers[0][i]);
