@@ -4,6 +4,7 @@
 
 #include <limits>
 #include <vector>
+#include <future>
 
 #include "audio_core/audio_out.h"
 #include "audio_core/audio_renderer.h"
@@ -13,6 +14,8 @@
 #include "common/logging/log.h"
 #include "core/memory.h"
 #include "core/settings.h"
+
+std::future<void> QueueMixedThreadFence;
 
 namespace {
 [[nodiscard]] static constexpr s16 ClampToS16(s32 value) {
@@ -210,7 +213,7 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag) {
         mix_context.SortInfo();
     }
     
-    ThreadAudioBuffer = std::async(std::launch::async, [&] {
+    QueueMixedThreadFence = std::async(std::launch::async, [&] {
     // Sort our voices
     voice_context.SortInfo();
 
@@ -241,7 +244,7 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag) {
                 command_generator.GetMixBuffer(in_params.buffer_offset + buffer_offsets[i]);
         }
 
-        ThreadAudioBuffer.get();
+        QueueMixedThreadFence.get();
         
         for (std::size_t i = 0; i < BUFFER_SIZE; i++) {
             if (channel_count == 1) {
