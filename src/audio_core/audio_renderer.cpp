@@ -15,7 +15,6 @@
 #include "core/memory.h"
 #include "core/settings.h"
 
-std::future<void> QueueMixedThreadFence;
 
 namespace {
 [[nodiscard]] static constexpr s16 ClampToS16(s32 value) {
@@ -71,6 +70,9 @@ namespace {
 } // namespace
 
 namespace AudioCore {
+    
+std::future<void> QueueAudioBufferFence1;
+    
 AudioRenderer::AudioRenderer(Core::Timing::CoreTiming& core_timing, Core::Memory::Memory& memory_,
                              AudioCommon::AudioRendererParameter params,
                              Stream::ReleaseCallback&& release_callback,
@@ -91,8 +93,10 @@ AudioRenderer::AudioRenderer(Core::Timing::CoreTiming& core_timing, Core::Memory
         fmt::format("AudioRenderer-Instance{}", instance_number), std::move(release_callback));
     audio_out->StartStream(stream);
 
+QueueAudioBufferFence1 = std::async(std::launch::async, [&] {
     QueueMixedBuffer(0);
     QueueMixedBuffer(1);
+});
     QueueMixedBuffer(2);
     QueueMixedBuffer(3);
 }
