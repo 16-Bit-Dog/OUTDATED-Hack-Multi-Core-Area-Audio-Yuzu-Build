@@ -15,7 +15,6 @@
 #include "core/memory.h"
 #include "core/settings.h"
 
-
 namespace {
 [[nodiscard]] static constexpr s16 ClampToS16(s32 value) {
     return static_cast<s16>(std::clamp(value, s32{std::numeric_limits<s16>::min()},
@@ -70,8 +69,9 @@ namespace {
 } // namespace
 
 namespace AudioCore {
-    
+
 std::future<void> QueueAudioBufferFence1;
+std::vector <std::future<void>> QueueMixedThreadFence2;
     
 AudioRenderer::AudioRenderer(Core::Timing::CoreTiming& core_timing, Core::Memory::Memory& memory_,
                              AudioCommon::AudioRendererParameter params,
@@ -93,10 +93,8 @@ AudioRenderer::AudioRenderer(Core::Timing::CoreTiming& core_timing, Core::Memory
         fmt::format("AudioRenderer-Instance{}", instance_number), std::move(release_callback));
     audio_out->StartStream(stream);
 
-QueueAudioBufferFence1 = std::async(std::launch::async, [&] {
     QueueMixedBuffer(0);
     QueueMixedBuffer(1);
-});
     QueueMixedBuffer(2);
     QueueMixedBuffer(3);
 }
@@ -217,6 +215,7 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag) {
         mix_context.SortInfo();
     }
     
+     QueueMixedThreadFence2.push_back(std::async(std::launch::async, [&] { //auto deallocate... kool   
     // Sort our voices
     voice_context.SortInfo();
 
@@ -226,7 +225,8 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag) {
     command_generator.GenerateFinalMixCommands();
 
     command_generator.PostCommand();
-    
+    }));
+
     // Base sample size
     std::size_t BUFFER_SIZE{worker_params.sample_count};
     // Samples
@@ -245,7 +245,8 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag) {
             mix_buffers[i] =
                 command_generator.GetMixBuffer(in_params.buffer_offset + buffer_offsets[i]);
         }
-        
+        QueueMixedThreadFence2[QueueMixedThreadFence2.size() - 1].get();
+
         for (std::size_t i = 0; i < BUFFER_SIZE; i++) {
             if (channel_count == 1) {
                 const auto sample = ClampToS16(mix_buffers[0][i]);
@@ -324,10 +325,19 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag) {
 }
 
 void AudioRenderer::ReleaseAndQueueBuffers() {
+
     const auto released_buffers{audio_out->GetTagsAndReleaseBuffers(stream)};
+    
+    QueueMixedThreadFence2.resize(0)
+        
     for (const auto& tag : released_buffers) {
+        
+        
         QueueMixedBuffer(tag);
+
+        
     }
+
 }
 
 } // namespace AudioCore
