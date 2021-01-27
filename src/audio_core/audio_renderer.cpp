@@ -328,7 +328,7 @@ void AudioRenderer::ReleaseAndQueueBuffers() {
 
     const auto released_buffers{audio_out->GetTagsAndReleaseBuffers(stream)};
     
-    QueueMixedThreadFence2.resize(0)
+    QueueMixedThreadFence2.resize(0);
         
     for (const auto& tag : released_buffers) {
         
