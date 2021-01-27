@@ -340,7 +340,7 @@ void AudioRenderer::ReleaseAndQueueBuffers() {
     keepThreadReady2 = std::async(std::launch::async, [&]{    
         QueueMixedBuffer(tag);
     });
-    keepThreadReady2.get()
+    keepThreadReady2.get();
     }
 
 }
