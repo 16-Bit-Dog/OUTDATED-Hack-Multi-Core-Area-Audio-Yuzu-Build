@@ -71,6 +71,8 @@ namespace {
 namespace AudioCore {
 
 std::vector <std::future<void>> queueMixedThreadFence;
+std::future<void> keepThreadReady1;
+std::future<void> keepThreadReady2;
     
 AudioRenderer::AudioRenderer(Core::Timing::CoreTiming& core_timing, Core::Memory::Memory& memory_,
                              AudioCommon::AudioRendererParameter params,
@@ -199,7 +201,11 @@ ResultCode AudioRenderer::UpdateAudioRenderer(const std::vector<u8>& input_param
         return AudioCommon::Audren::ERR_INVALID_PARAMETERS;
     }
 
-    ReleaseAndQueueBuffers();
+    keepThreadReady1 = std::async(std::launch::async, [&] { 
+    ReleaseAndQueueBuffers(); 
+    });
+
+    QueueAudioBufferFence1.get();
 
     return RESULT_SUCCESS;
 }
@@ -328,13 +334,13 @@ void AudioRenderer::ReleaseAndQueueBuffers() {
     const auto released_buffers{audio_out->GetTagsAndReleaseBuffers(stream)};
     
     queueMixedThreadFence.resize(0); //instead of passing a s16 to the queue mixed buffer to control, pushing values to a vector seemed about as fast
-        
+    
     for (const auto& tag : released_buffers) {
-        
-        
+    
+    keepThreadReady2 = std::async(std::launch::async, [&]{    
         QueueMixedBuffer(tag);
-
-        
+    });
+    keepThreadReady2.get()
     }
 
 }
