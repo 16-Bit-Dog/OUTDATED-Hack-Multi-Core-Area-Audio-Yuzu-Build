@@ -16,6 +16,7 @@
 #include "applets/profile_select.h"
 #include "applets/software_keyboard.h"
 #include "applets/web_browser.h"
+#include "common/nvidia_flags.h"
 #include "configuration/configure_input.h"
 #include "configuration/configure_per_game.h"
 #include "configuration/configure_vibration.h"
@@ -1037,8 +1038,6 @@ bool GMainWindow::LoadROM(const QString& filename, std::size_t program_index) {
         std::make_unique<QtSoftwareKeyboard>(*this),   // Software Keyboard
         std::make_unique<QtWebBrowser>(*this),         // Web Browser
     });
-
-    system.RegisterHostThread();
 
     const Core::System::ResultStatus result{
         system.Load(*render_window, filename.toStdString(), program_index)};
@@ -3022,6 +3021,8 @@ int main(int argc, char* argv[]) {
     Common::DetachedTasks detached_tasks;
     MicroProfileOnThreadCreate("Frontend");
     SCOPE_EXIT({ MicroProfileShutdown(); });
+
+    Common::ConfigureNvidiaEnvironmentFlags();
 
     // Init settings params
     QCoreApplication::setOrganizationName(QStringLiteral("yuzu team"));
