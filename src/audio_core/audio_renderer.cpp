@@ -347,6 +347,18 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
     // Make sure to clear our samples
     std::memset(buffer.data(), 0, buffer.size() * sizeof(s16));
     
+    if (sink_context.InUse()) {
+        const auto stream_channel_count = stream->GetNumChannels();
+        const auto buffer_offsets = sink_context.OutputBuffers();
+        const auto channel_count = buffer_offsets.size();
+        const auto& final_mix = mix_context.GetFinalMixInfo();
+        const auto& in_params = final_mix.GetInParams();
+        std::vector<s32*> mix_buffers(channel_count);
+        for (std::size_t i = 0; i < channel_count; i++) {
+            mix_buffers[i] =
+                command_generator.GetMixBuffer(in_params.buffer_offset + buffer_offsets[i]);
+        }
+        
     switch (current_thread) {
         case 1:
             queue_mixed_multithread_fence1.arrive_and_wait();
@@ -368,20 +380,7 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
             queue_mixed_multithread_fence6.arrive_and_wait();
             break;
     }
-    
-    if (sink_context.InUse()) {
-        const auto stream_channel_count = stream->GetNumChannels();
-        const auto buffer_offsets = sink_context.OutputBuffers();
-        const auto channel_count = buffer_offsets.size();
-        const auto& final_mix = mix_context.GetFinalMixInfo();
-        const auto& in_params = final_mix.GetInParams();
-        std::vector<s32*> mix_buffers(channel_count);
-        for (std::size_t i = 0; i < channel_count; i++) {
-            mix_buffers[i] =
-                command_generator.GetMixBuffer(in_params.buffer_offset + buffer_offsets[i]);
-        }
-        queueMixedThreadFence[queueMixedThreadFence.size() - 1].get();
-
+     
         for (std::size_t i = 0; i < BUFFER_SIZE; i++) {
             if (channel_count == 1) {
                 const auto sample = ClampToS16(mix_buffers[0][i]);
