@@ -5,6 +5,7 @@
 #include <limits>
 #include <vector>
 #include <future>
+#include <barrier>
 
 #include "audio_core/audio_out.h"
 #include "audio_core/audio_renderer.h"
@@ -70,9 +71,13 @@ namespace {
 
 namespace AudioCore {
 
-std::vector <std::future<void>> queueMixedThreadFence;
-std::future<void> keepThreadReady1;
-std::future<void> keepThreadReady2;
+//containor of a unmovable, mutable, copiable, and constructable object is a painful mess... so indiviudal elements
+std::barrier queue_mixed_multithread_fence1(1); 
+std::barrier queue_mixed_multithread_fence2(2); 
+std::barrier queue_mixed_multithread_fence3(3);
+std::barrier queue_mixed_multithread_fence4(4);
+std::barrier queue_mixed_multithread_fence5(5);
+std::barrier queue_mixed_multithread_fence6(6);
     
 AudioRenderer::AudioRenderer(Core::Timing::CoreTiming& core_timing, Core::Memory::Memory& memory_,
                              AudioCommon::AudioRendererParameter params,
@@ -94,10 +99,10 @@ AudioRenderer::AudioRenderer(Core::Timing::CoreTiming& core_timing, Core::Memory
         fmt::format("AudioRenderer-Instance{}", instance_number), std::move(release_callback));
     audio_out->StartStream(stream);
 
-    QueueMixedBuffer(0);
-    QueueMixedBuffer(1);
-    QueueMixedBuffer(2);
-    QueueMixedBuffer(3);
+    QueueMixedBuffer(0, 0, 0);
+    QueueMixedBuffer(1, 0, 0);
+    QueueMixedBuffer(2, 0, 0);
+    QueueMixedBuffer(3, 0, 0);
 }
 
 AudioRenderer::~AudioRenderer() = default;
@@ -201,16 +206,121 @@ ResultCode AudioRenderer::UpdateAudioRenderer(const std::vector<u8>& input_param
         return AudioCommon::Audren::ERR_INVALID_PARAMETERS;
     }
 
-    keepThreadReady1 = std::async(std::launch::async, [&] { 
     ReleaseAndQueueBuffers(); 
-    });
-
-    QueueAudioBufferFence1.get();
 
     return RESULT_SUCCESS;
 }
 
-void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag) {
+void inline AudioRenderer::ThreadIncrementReleaseAndQueueBuffers(s16 buffer_max, 
+                                     s16 current_thread) {
+
+        switch (current_thread) {
+
+    case 1:
+        // do not have case 1 for the switch below to omit fence barrier reduction <-- this is used
+        // since a non movable, copiable, or constructable object might as well be made into a well
+        // thought out switch statment - no list can take this var
+        switch (buffer_max) {
+
+        case 1:
+            return;
+
+        case 2:
+            static_cast<void>(queue_mixed_multithread_fence2.arrive());
+            return;
+        case 3:
+            static_cast<void>(queue_mixed_multithread_fence2.arrive());
+            static_cast<void>(queue_mixed_multithread_fence3.arrive());
+            return;
+        case 4:
+            static_cast<void>(queue_mixed_multithread_fence2.arrive());
+            static_cast<void>(queue_mixed_multithread_fence3.arrive());
+            static_cast<void>(queue_mixed_multithread_fence4.arrive());
+            return;
+        case 5:
+            static_cast<void>(queue_mixed_multithread_fence2.arrive());
+            static_cast<void>(queue_mixed_multithread_fence3.arrive());
+            static_cast<void>(queue_mixed_multithread_fence4.arrive());
+            static_cast<void>(queue_mixed_multithread_fence5.arrive());
+            return;
+        case 6:
+            static_cast<void>(queue_mixed_multithread_fence2.arrive());
+            static_cast<void>(queue_mixed_multithread_fence3.arrive());
+            static_cast<void>(queue_mixed_multithread_fence4.arrive());
+            static_cast<void>(queue_mixed_multithread_fence5.arrive());
+            static_cast<void>(queue_mixed_multithread_fence6.arrive());
+            return;
+        }
+
+    case 2:
+        switch (buffer_max) {
+
+        case 2:
+            return;
+        case 3:
+            static_cast<void>(queue_mixed_multithread_fence3.arrive());
+            return;
+        case 4:
+            static_cast<void>(queue_mixed_multithread_fence3.arrive());
+            static_cast<void>(queue_mixed_multithread_fence4.arrive());
+            return;
+        case 5:
+            static_cast<void>(queue_mixed_multithread_fence3.arrive());
+            static_cast<void>(queue_mixed_multithread_fence4.arrive());
+            static_cast<void>(queue_mixed_multithread_fence5.arrive());
+            return;
+        case 6:
+            static_cast<void>(queue_mixed_multithread_fence3.arrive());
+            static_cast<void>(queue_mixed_multithread_fence4.arrive());
+            static_cast<void>(queue_mixed_multithread_fence5.arrive());
+            static_cast<void>(queue_mixed_multithread_fence6.arrive());
+            return;
+        }
+
+    case 3:
+        switch (buffer_max) {
+        case 3:
+            return;
+        case 4:
+            static_cast<void>(queue_mixed_multithread_fence4.arrive());
+            return;
+        case 5:
+            static_cast<void>(queue_mixed_multithread_fence4.arrive());
+            static_cast<void>(queue_mixed_multithread_fence5.arrive());
+            return;
+        case 6:
+            static_cast<void>(queue_mixed_multithread_fence4.arrive());
+            static_cast<void>(queue_mixed_multithread_fence5.arrive());
+            static_cast<void>(queue_mixed_multithread_fence6.arrive());
+            return;
+        }
+
+    case 4:
+        switch (buffer_max) {
+        case 4:
+            return;
+        case 5:
+            static_cast<void>(queue_mixed_multithread_fence5.arrive());
+            return;
+        case 6:
+            static_cast<void>(queue_mixed_multithread_fence5.arrive());
+            static_cast<void>(queue_mixed_multithread_fence6.arrive());
+            return;
+        }
+    case 5:
+        switch (buffer_max) {
+        case 5:
+            return;
+        case 6:
+            static_cast<void>(queue_mixed_multithread_fence6.arrive());
+            return;
+        }
+    }
+
+}
+    
+void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
+                                     s16 current_thread) {
     command_generator.PreCommand();
     // Clear mix buffers before our next operation
     command_generator.ClearMixBuffers();
@@ -220,7 +330,6 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag) {
         mix_context.SortInfo();
     }
     
-     queueMixedThreadFence.push_back(std::async(std::launch::async, [&] {   
     // Sort our voices
     voice_context.SortInfo();
 
@@ -230,15 +339,36 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag) {
     command_generator.GenerateFinalMixCommands();
 
     command_generator.PostCommand();
-    }));
-
+   
     // Base sample size
     std::size_t BUFFER_SIZE{worker_params.sample_count};
     // Samples
     std::vector<s16> buffer(BUFFER_SIZE * stream->GetNumChannels());
     // Make sure to clear our samples
     std::memset(buffer.data(), 0, buffer.size() * sizeof(s16));
-
+    
+    switch (current_thread) {
+        case 1:
+            queue_mixed_multithread_fence1.arrive_and_wait();
+            break;
+        case 2:
+            queue_mixed_multithread_fence2.arrive_and_wait();
+            break;
+        case 3:
+            queue_mixed_multithread_fence3.arrive_and_wait();
+            break;
+        case 4:
+            queue_mixed_multithread_fence4.arrive_and_wait();
+            return;
+            //break;
+        case 5:
+            queue_mixed_multithread_fence5.arrive_and_wait();
+            break;
+        case 6:
+            queue_mixed_multithread_fence6.arrive_and_wait();
+            break;
+    }
+    
     if (sink_context.InUse()) {
         const auto stream_channel_count = stream->GetNumChannels();
         const auto buffer_offsets = sink_context.OutputBuffers();
@@ -327,22 +457,32 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag) {
     audio_out->QueueBuffer(stream, tag, std::move(buffer));
     elapsed_frame_count++;
     voice_context.UpdateStateByDspShared();
+    
+    //with a mail box system: so far made for 6 mixed buffer processes
+    ThreadIncrementReleaseAndQueueBuffers(buffer_max, current_thread);
 }
 
 void AudioRenderer::ReleaseAndQueueBuffers() {
-
+    s16 thread_counter = 0;
+    
     const auto released_buffers{audio_out->GetTagsAndReleaseBuffers(stream)};
     
-    queueMixedThreadFence.resize(0); //instead of passing a s16 to the queue mixed buffer to control, pushing values to a vector seemed about as fast
-    
+    queue_mixed_multithread.resize(released_buffers.size());
+
     for (const auto& tag : released_buffers) {
-    
-    keepThreadReady2 = std::async(std::launch::async, [&]{    
-        QueueMixedBuffer(tag);
-    });
-    keepThreadReady2.get();
+            queue_mixed_multithread[thread_counter] = std::async(std::launch::async, [=] { 
+                QueueMixedBuffer(tag, released_buffers.size(), thread_counter+1);
+            });
+            thread_counter++;
     }
 
+     std::size_t thread_to_refrence = 0;
+    
+    while (thread_to_refrence < released_buffers.size()) {
+         queue_mixed_multithread[thread_to_refrence].get();
+         thread_to_refrence++;
+    }
+    
 }
 
 } // namespace AudioCore
