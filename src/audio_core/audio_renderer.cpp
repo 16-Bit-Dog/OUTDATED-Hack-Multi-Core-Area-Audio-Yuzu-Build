@@ -322,6 +322,28 @@ void inline AudioRenderer::ThreadIncrementReleaseAndQueueBuffers(s16 buffer_max,
 void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
                                      s16 current_thread) {
     command_generator.PreCommand();
+    
+        switch (current_thread) {
+        case 1:
+            queue_mixed_multithread_fence1.arrive_and_wait();
+            break;
+        case 2:
+            queue_mixed_multithread_fence2.arrive_and_wait();
+            break;
+        case 3:
+            queue_mixed_multithread_fence3.arrive_and_wait();
+            break;
+        case 4:
+            queue_mixed_multithread_fence4.arrive_and_wait();
+            return;
+            //break;
+        case 5:
+            queue_mixed_multithread_fence5.arrive_and_wait();
+            break;
+        case 6:
+            queue_mixed_multithread_fence6.arrive_and_wait();
+            break;
+    }
     // Clear mix buffers before our next operation
     command_generator.ClearMixBuffers();
 
@@ -335,6 +357,8 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
 
     // Handle samples
     command_generator.GenerateVoiceCommands();
+    //due to the nature of processing for the GenerateVoiceCommands function, it is better to just leave idiviudal threads to work one at a time on its own process process
+    ThreadIncrementReleaseAndQueueBuffers(buffer_max, current_thread);
     command_generator.GenerateSubMixCommands();
     command_generator.GenerateFinalMixCommands();
 
@@ -358,29 +382,7 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
             mix_buffers[i] =
                 command_generator.GetMixBuffer(in_params.buffer_offset + buffer_offsets[i]);
         }
-        
-    switch (current_thread) {
-        case 1:
-            queue_mixed_multithread_fence1.arrive_and_wait();
-            break;
-        case 2:
-            queue_mixed_multithread_fence2.arrive_and_wait();
-            break;
-        case 3:
-            queue_mixed_multithread_fence3.arrive_and_wait();
-            break;
-        case 4:
-            queue_mixed_multithread_fence4.arrive_and_wait();
-            return;
-            //break;
-        case 5:
-            queue_mixed_multithread_fence5.arrive_and_wait();
-            break;
-        case 6:
-            queue_mixed_multithread_fence6.arrive_and_wait();
-            break;
-    }
-     
+             
         for (std::size_t i = 0; i < BUFFER_SIZE; i++) {
             if (channel_count == 1) {
                 const auto sample = ClampToS16(mix_buffers[0][i]);
@@ -457,8 +459,8 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
     elapsed_frame_count++;
     voice_context.UpdateStateByDspShared();
     
-    //with a mail box system: so far made for 6 mixed buffer processes
-    ThreadIncrementReleaseAndQueueBuffers(buffer_max, current_thread);
+    //mail box system used: so far made for 6 mixed buffer processes since I only found games use 4 - and since barriers are not movable or copiable
+    
 }
 
 void AudioRenderer::ReleaseAndQueueBuffers() {
