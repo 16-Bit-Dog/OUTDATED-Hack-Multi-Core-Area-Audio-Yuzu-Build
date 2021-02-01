@@ -216,7 +216,7 @@ void inline AudioRenderer::ThreadIncrementReleaseAndQueueBuffers(s16 buffer_max,
 
         switch (current_thread) {
 
-    case 1:
+        case 1:
         // do not have case 1 for the switch below to omit fence barrier reduction <-- this is used
         // since a non movable, copiable, or constructable object might as well be made into a well
         // thought out switch statment - no list can take this var
@@ -322,8 +322,10 @@ void inline AudioRenderer::ThreadIncrementReleaseAndQueueBuffers(s16 buffer_max,
 void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
                                      s16 current_thread) {
     command_generator.PreCommand();
-    
-        switch (current_thread) {
+    // Clear mix buffers before our next operation
+    command_generator.ClearMixBuffers();
+        
+    switch (current_thread) {
         case 1:
             queue_mixed_multithread_fence1.arrive_and_wait();
             break;
@@ -344,9 +346,6 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
             queue_mixed_multithread_fence6.arrive_and_wait();
             break;
     }
-    // Clear mix buffers before our next operation
-    command_generator.ClearMixBuffers();
-
     // If the splitter is not in use, sort our mixes
     if (!splitter_context.UsingSplitter()) {
         mix_context.SortInfo();
@@ -359,6 +358,7 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
     command_generator.GenerateVoiceCommands();
     //due to the nature of processing for the GenerateVoiceCommands function, it is better to just leave idiviudal threads to work one at a time on its own process process
     ThreadIncrementReleaseAndQueueBuffers(buffer_max, current_thread);
+    
     command_generator.GenerateSubMixCommands();
     command_generator.GenerateFinalMixCommands();
 
