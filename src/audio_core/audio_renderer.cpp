@@ -71,7 +71,7 @@ namespace {
 
 namespace AudioCore {
 
-//containor of a unmovable, mutable, copiable, and constructable object is a painful mess... so indiviudal elements
+//container of a unmovable, mutable, or copiable, and constructable object is a painful mess to put in a member initializer list
 std::barrier queue_mixed_multithread_fence1(1); 
 std::barrier queue_mixed_multithread_fence2(2); 
 std::barrier queue_mixed_multithread_fence3(3);
