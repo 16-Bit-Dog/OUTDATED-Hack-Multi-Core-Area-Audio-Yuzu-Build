@@ -336,7 +336,7 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
         case 4:
             queue_mixed_multithread_fence4.arrive_and_wait();
             return;
-            //break;
+            break;
         case 5:
             queue_mixed_multithread_fence5.arrive_and_wait();
             break;
