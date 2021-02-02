@@ -322,10 +322,8 @@ void inline AudioRenderer::ThreadIncrementReleaseAndQueueBuffers(s16 buffer_max,
 void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
                                      s16 current_thread) {
     command_generator.PreCommand();
-    // Clear mix buffers before our next operation
-    command_generator.ClearMixBuffers();
-        
-    switch (current_thread) {
+    
+        switch (current_thread) {
         case 1:
             queue_mixed_multithread_fence1.arrive_and_wait();
             break;
@@ -346,6 +344,9 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
             queue_mixed_multithread_fence6.arrive_and_wait();
             break;
     }
+    
+    // Clear mix buffers before our next operation
+    command_generator.ClearMixBuffers();
     // If the splitter is not in use, sort our mixes
     if (!splitter_context.UsingSplitter()) {
         mix_context.SortInfo();
