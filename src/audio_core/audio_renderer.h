@@ -71,7 +71,7 @@ private:
     CommandGenerator command_generator;
     std::size_t elapsed_frame_count{};
     std::vector<std::future<void>> queue_mixed_multithread;
-    std::vector<std::mutex> mtx{5};
+    std::vector<std::mutex> mtx{8};
 };
 
 } // namespace AudioCore
