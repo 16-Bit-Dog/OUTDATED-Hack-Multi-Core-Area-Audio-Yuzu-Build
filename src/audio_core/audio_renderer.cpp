@@ -5,7 +5,7 @@
 #include <limits>
 #include <vector>
 #include <future>
-#include <mutex>
+#include <barrier>
 
 #include "audio_core/audio_out.h"
 #include "audio_core/audio_renderer.h"
@@ -72,7 +72,12 @@ namespace {
 namespace AudioCore {
 
 //container of a unmovable, mutable, or copiable, and constructable object is a painful mess to put in a member initializer list
-
+std::barrier queue_mixed_multithread_fence1(1); 
+std::barrier queue_mixed_multithread_fence2(2); 
+std::barrier queue_mixed_multithread_fence3(3);
+std::barrier queue_mixed_multithread_fence4(4);
+std::barrier queue_mixed_multithread_fence5(5);
+std::barrier queue_mixed_multithread_fence6(6);
     
 AudioRenderer::AudioRenderer(Core::Timing::CoreTiming& core_timing, Core::Memory::Memory& memory_,
                              AudioCommon::AudioRendererParameter params,
@@ -94,10 +99,10 @@ AudioRenderer::AudioRenderer(Core::Timing::CoreTiming& core_timing, Core::Memory
         fmt::format("AudioRenderer-Instance{}", instance_number), std::move(release_callback));
     audio_out->StartStream(stream);
 
-    QueueMixedBuffer(0, 0, 1);
-    QueueMixedBuffer(1, 0, 1);
-    QueueMixedBuffer(2, 0, 1);
-    QueueMixedBuffer(3, 0, 1);
+    QueueMixedBuffer(0, 0, 0);
+    QueueMixedBuffer(1, 0, 0);
+    QueueMixedBuffer(2, 0, 0);
+    QueueMixedBuffer(3, 0, 0);
 }
 
 AudioRenderer::~AudioRenderer() = default;
@@ -206,13 +211,138 @@ ResultCode AudioRenderer::UpdateAudioRenderer(const std::vector<u8>& input_param
     return RESULT_SUCCESS;
 }
 
+void AudioRenderer::ThreadIncrementReleaseAndQueueBuffers(s16 buffer_max, 
+                                     s16 current_thread) {
+
+        switch (current_thread) {
+
+        case 1:
+        // do not have case 1 for the switch below to omit fence barrier reduction <-- this is used
+        // since a non movable, copiable, or constructable object might as well be made into a well
+        // thought out switch statment - no list can take this var
+        switch (buffer_max) {
+
+        case 1:
+            return;
+
+        case 2:
+            static_cast<void>(queue_mixed_multithread_fence2.arrive());
+            return;
+        case 3:
+            static_cast<void>(queue_mixed_multithread_fence2.arrive());
+            static_cast<void>(queue_mixed_multithread_fence3.arrive());
+            return;
+        case 4:
+            static_cast<void>(queue_mixed_multithread_fence2.arrive());
+            static_cast<void>(queue_mixed_multithread_fence3.arrive());
+            static_cast<void>(queue_mixed_multithread_fence4.arrive());
+            return;
+        case 5:
+            static_cast<void>(queue_mixed_multithread_fence2.arrive());
+            static_cast<void>(queue_mixed_multithread_fence3.arrive());
+            static_cast<void>(queue_mixed_multithread_fence4.arrive());
+            static_cast<void>(queue_mixed_multithread_fence5.arrive());
+            return;
+        case 6:
+            static_cast<void>(queue_mixed_multithread_fence2.arrive());
+            static_cast<void>(queue_mixed_multithread_fence3.arrive());
+            static_cast<void>(queue_mixed_multithread_fence4.arrive());
+            static_cast<void>(queue_mixed_multithread_fence5.arrive());
+            static_cast<void>(queue_mixed_multithread_fence6.arrive());
+            return;
+        }
+
+    case 2:
+        switch (buffer_max) {
+
+        case 2:
+            return;
+        case 3:
+            static_cast<void>(queue_mixed_multithread_fence3.arrive());
+            return;
+        case 4:
+            static_cast<void>(queue_mixed_multithread_fence3.arrive());
+            static_cast<void>(queue_mixed_multithread_fence4.arrive());
+            return;
+        case 5:
+            static_cast<void>(queue_mixed_multithread_fence3.arrive());
+            static_cast<void>(queue_mixed_multithread_fence4.arrive());
+            static_cast<void>(queue_mixed_multithread_fence5.arrive());
+            return;
+        case 6:
+            static_cast<void>(queue_mixed_multithread_fence3.arrive());
+            static_cast<void>(queue_mixed_multithread_fence4.arrive());
+            static_cast<void>(queue_mixed_multithread_fence5.arrive());
+            static_cast<void>(queue_mixed_multithread_fence6.arrive());
+            return;
+        }
+
+    case 3:
+        switch (buffer_max) {
+        case 3:
+            return;
+        case 4:
+            static_cast<void>(queue_mixed_multithread_fence4.arrive());
+            return;
+        case 5:
+            static_cast<void>(queue_mixed_multithread_fence4.arrive());
+            static_cast<void>(queue_mixed_multithread_fence5.arrive());
+            return;
+        case 6:
+            static_cast<void>(queue_mixed_multithread_fence4.arrive());
+            static_cast<void>(queue_mixed_multithread_fence5.arrive());
+            static_cast<void>(queue_mixed_multithread_fence6.arrive());
+            return;
+        }
+
+    case 4:
+        switch (buffer_max) {
+        case 4:
+            return;
+        case 5:
+            static_cast<void>(queue_mixed_multithread_fence5.arrive());
+            return;
+        case 6:
+            static_cast<void>(queue_mixed_multithread_fence5.arrive());
+            static_cast<void>(queue_mixed_multithread_fence6.arrive());
+            return;
+        }
+    case 5:
+        switch (buffer_max) {
+        case 5:
+            return;
+        case 6:
+            static_cast<void>(queue_mixed_multithread_fence6.arrive());
+            return;
+        }
+    }
+
+}
     
 void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
                                      s16 current_thread) {
     command_generator.PreCommand();
     
-    if (current_thread != 1) {
-        mtx[current_thread].lock();
+        switch (current_thread) {
+        case 1:
+            queue_mixed_multithread_fence1.arrive_and_wait();
+            break;
+        case 2:
+            queue_mixed_multithread_fence2.arrive_and_wait();
+            break;
+        case 3:
+            queue_mixed_multithread_fence3.arrive_and_wait();
+            break;
+        case 4:
+            queue_mixed_multithread_fence4.arrive_and_wait();
+            return;
+            break;
+        case 5:
+            queue_mixed_multithread_fence5.arrive_and_wait();
+            break;
+        case 6:
+            queue_mixed_multithread_fence6.arrive_and_wait();
+            break;
     }
     
     // Clear mix buffers before our next operation
@@ -228,9 +358,7 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
     // Handle samples
     command_generator.GenerateVoiceCommands();
     //due to the nature of processing for the GenerateVoiceCommands function, it is better to just leave idiviudal threads to work one at a time on its own process process
-        if (current_thread != 1) {
-            mtx[current_thread].unlock();
-        }
+    ThreadIncrementReleaseAndQueueBuffers(buffer_max, current_thread);
     
     command_generator.GenerateSubMixCommands();
     command_generator.GenerateFinalMixCommands();
