@@ -211,7 +211,7 @@ ResultCode AudioRenderer::UpdateAudioRenderer(const std::vector<u8>& input_param
     return RESULT_SUCCESS;
 }
 
-void inline AudioRenderer::ThreadIncrementReleaseAndQueueBuffers(s16 buffer_max, 
+void AudioRenderer::ThreadIncrementReleaseAndQueueBuffers(s16 buffer_max, 
                                      s16 current_thread) {
 
         switch (current_thread) {
