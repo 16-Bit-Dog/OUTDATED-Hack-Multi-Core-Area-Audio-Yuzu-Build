@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 #include <future>
+#include <mutex>
 
 #include "audio_core/behavior_info.h"
 #include "audio_core/command_generator.h"
