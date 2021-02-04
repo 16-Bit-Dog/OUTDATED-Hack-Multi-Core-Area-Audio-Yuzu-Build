@@ -224,11 +224,6 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
 
     // Handle samples
     command_generator.GenerateVoiceCommands();
-    //due to the nature of processing for the GenerateVoiceCommands function, it is better to just leave idiviudal threads to work one at a time on its own process process
-    
-        if (buffer_max != current_thread) {
-            mtx[current_thread+1].unlock();
-        }
     
     command_generator.GenerateSubMixCommands();
     command_generator.GenerateFinalMixCommands();
@@ -329,8 +324,10 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
     audio_out->QueueBuffer(stream, tag, std::move(buffer));
     elapsed_frame_count++;
     voice_context.UpdateStateByDspShared();
-    
-    //mail box system used: so far made for 6 mixed buffer processes since I only found games use 4 - and since barriers are not movable or copiable
+
+    if (buffer_max != current_thread) {
+        mtx[current_thread+1].unlock();
+    }
     
 }
 
