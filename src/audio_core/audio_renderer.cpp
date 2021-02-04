@@ -207,11 +207,6 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
                                      s16 current_thread) {
     command_generator.PreCommand();
     
-    
-    if (current_thread != 1) {
-        mtx[current_thread].lock();
-    }    
-    
     // Clear mix buffers before our next operation
     command_generator.ClearMixBuffers();
     // If the splitter is not in use, sort our mixes
@@ -324,10 +319,6 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
     audio_out->QueueBuffer(stream, tag, std::move(buffer));
     elapsed_frame_count++;
     voice_context.UpdateStateByDspShared();
-
-    if (buffer_max != current_thread) {
-        mtx[current_thread+1].unlock();
-    }
     
 }
 
@@ -339,7 +330,9 @@ void AudioRenderer::ReleaseAndQueueBuffers() {
     queue_mixed_multithread.resize(released_buffers.size());
 
     for (const auto& tag : released_buffers) {
-            queue_mixed_multithread[thread_counter] = std::async(std::launch::async, [=] { 
+            queue_mixed_multithread[thread_counter] = std::async(std::launch::async, [=, voice_context = voice_context, worker_params = worker_params, mix_context = mix_context, splitter_context = splitter_context, 
+             sink_context = sink_context, voices = voices, //TODO: reduce and remove usless captures
+                                 stream = stream] { 
                 QueueMixedBuffer(tag, released_buffers.size(), thread_counter+1);
             });
             thread_counter++;
