@@ -206,7 +206,6 @@ ResultCode AudioRenderer::UpdateAudioRenderer(const std::vector<u8>& input_param
 void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
                                      s16 current_thread) {
     command_generator.PreCommand();
-    
     // Clear mix buffers before our next operation
     command_generator.ClearMixBuffers();
     // If the splitter is not in use, sort our mixes
@@ -216,13 +215,12 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
     
     // Sort our voices
     voice_context.SortInfo();
-
+    
     // Handle samples
     command_generator.GenerateVoiceCommands();
-    
     command_generator.GenerateSubMixCommands();
     command_generator.GenerateFinalMixCommands();
-
+    
     command_generator.PostCommand();
    
     // Base sample size
@@ -330,19 +328,17 @@ void AudioRenderer::ReleaseAndQueueBuffers() {
     queue_mixed_multithread.resize(released_buffers.size());
 
     for (const auto& tag : released_buffers) {
-            queue_mixed_multithread[thread_counter] = std::async(std::launch::async, [=, voice_context = voice_context, splitter_context = splitter_context,
-                        mix_context = mix_context] { 
-                QueueMixedBuffer(tag, released_buffers.size(), thread_counter+1);
-            });
-            thread_counter++;
+        queue_mixed_multithread[thread_counter] = std::async(std::launch::async, [=, voice_context = voice_context, 
+          splitter_context = splitter_context, mix_context = mix_context] { 
+            QueueMixedBuffer(tag, released_buffers.size(), thread_counter+1);
+        });
+    
+        thread_counter++;
     }
 
-     std::size_t thread_to_refrence = 0;
-    
+    std::size_t thread_to_refrence = 0;
     while (thread_to_refrence < released_buffers.size()) {
-        // queue_mixed_multithread[thread_to_refrence].get();
         queue_mixed_multithread[thread_to_refrence].wait();
-        
         thread_to_refrence++;
     }
     
