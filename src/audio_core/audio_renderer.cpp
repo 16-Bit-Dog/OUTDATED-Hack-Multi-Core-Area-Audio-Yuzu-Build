@@ -2,10 +2,10 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
-#include <limits>
-#include <vector>
 #include <future>
+#include <limits>
 #include <mutex>
+#include <vector>
 
 #include "audio_core/audio_out.h"
 #include "audio_core/audio_renderer.h"
@@ -70,7 +70,6 @@ namespace {
 } // namespace
 
 namespace AudioCore {
-    
 AudioRenderer::AudioRenderer(Core::Timing::CoreTiming& core_timing, Core::Memory::Memory& memory_,
                              AudioCommon::AudioRendererParameter params,
                              Stream::ReleaseCallback&& release_callback,
@@ -91,10 +90,10 @@ AudioRenderer::AudioRenderer(Core::Timing::CoreTiming& core_timing, Core::Memory
         fmt::format("AudioRenderer-Instance{}", instance_number), std::move(release_callback));
     audio_out->StartStream(stream);
 
-    QueueMixedBuffer(0, 0, 0);
-    QueueMixedBuffer(1, 0, 0);
-    QueueMixedBuffer(2, 0, 0);
-    QueueMixedBuffer(3, 0, 0);
+    QueueMixedBuffer(0);
+    QueueMixedBuffer(1);
+    QueueMixedBuffer(2);
+    QueueMixedBuffer(3);
 }
 
 AudioRenderer::~AudioRenderer() = default;
@@ -198,38 +197,36 @@ ResultCode AudioRenderer::UpdateAudioRenderer(const std::vector<u8>& input_param
         return AudioCommon::Audren::ERR_INVALID_PARAMETERS;
     }
 
-    ReleaseAndQueueBuffers(); 
+    ReleaseAndQueueBuffers();
 
     return RESULT_SUCCESS;
 }
-   
-void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
-                                     s16 current_thread) {
+
+void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag) {
     command_generator.PreCommand();
     // Clear mix buffers before our next operation
     command_generator.ClearMixBuffers();
+
     // If the splitter is not in use, sort our mixes
     if (!splitter_context.UsingSplitter()) {
         mix_context.SortInfo();
     }
-    
     // Sort our voices
     voice_context.SortInfo();
-    
+
     // Handle samples
     command_generator.GenerateVoiceCommands();
     command_generator.GenerateSubMixCommands();
     command_generator.GenerateFinalMixCommands();
-    
+
     command_generator.PostCommand();
-   
     // Base sample size
     std::size_t BUFFER_SIZE{worker_params.sample_count};
     // Samples
     std::vector<s16> buffer(BUFFER_SIZE * stream->GetNumChannels());
     // Make sure to clear our samples
     std::memset(buffer.data(), 0, buffer.size() * sizeof(s16));
-    
+
     if (sink_context.InUse()) {
         const auto stream_channel_count = stream->GetNumChannels();
         const auto buffer_offsets = sink_context.OutputBuffers();
@@ -241,7 +238,7 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
             mix_buffers[i] =
                 command_generator.GetMixBuffer(in_params.buffer_offset + buffer_offsets[i]);
         }
-             
+
         for (std::size_t i = 0; i < BUFFER_SIZE; i++) {
             if (channel_count == 1) {
                 const auto sample = ClampToS16(mix_buffers[0][i]);
@@ -317,31 +314,22 @@ void AudioRenderer::QueueMixedBuffer(Buffer::Tag tag, s16 buffer_max,
     audio_out->QueueBuffer(stream, tag, std::move(buffer));
     elapsed_frame_count++;
     voice_context.UpdateStateByDspShared();
-    
 }
 
 void AudioRenderer::ReleaseAndQueueBuffers() {
-    s16 thread_counter = 0;
-    
+    std::size_t thread_counter = 0;
     const auto released_buffers{audio_out->GetTagsAndReleaseBuffers(stream)};
-    
     queue_mixed_multithread.resize(released_buffers.size());
-
     for (const auto& tag : released_buffers) {
-        queue_mixed_multithread[thread_counter] = std::async(std::launch::async, [=, voice_context = voice_context, 
-          splitter_context = splitter_context, mix_context = mix_context] { 
-            QueueMixedBuffer(tag, released_buffers.size(), thread_counter+1);
-        });
-    
+        queue_mixed_multithread[thread_counter] =
+            std::async(std::launch::async, [this, tag, voice_context = voice_context,
+                                            splitter_context = splitter_context,
+                                            mix_context = mix_context] { QueueMixedBuffer(tag); });
         thread_counter++;
     }
-
-    std::size_t thread_to_refrence = 0;
-    while (thread_to_refrence < released_buffers.size()) {
-        queue_mixed_multithread[thread_to_refrence].wait();
-        thread_to_refrence++;
+    for (std::size_t thread = 0; thread < released_buffers.size(); thread++) {
+        queue_mixed_multithread[thread].wait();
     }
-    
 }
 
 } // namespace AudioCore
